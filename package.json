@@ -3,13 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "description": "Goban based on godash and react",
-  "main": "index.js",
+  "main": "src/index.jsx",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "browserify": {
+    "transform": [
+      [
+        "babelify"
+      ]
+    ]
+  },
   "dependencies": {
     "godash": "^0.1.2",
     "react": "^0.13.3"

@@ -6,6 +6,7 @@
   "main": "src/index.jsx",
   "scripts": {
     "build-example": "browserify -o ./example/simple_goban.js -r ./src/index.jsx:simple-goban",
+    "watch-example": "watchify -o ./example/simple_goban.js -r ./src/index.jsx:simple-goban",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

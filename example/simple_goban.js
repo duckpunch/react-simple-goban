@@ -1,4 +1,97 @@
 require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = setTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    clearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        setTimeout(drainQueue, 0);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],2:[function(require,module,exports){
 /**
  *  Copyright (c) 2014-2015, Facebook, Inc.
  *  All rights reserved.
@@ -4959,7 +5052,698 @@ require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof requ
   return Immutable;
 
 }));
-},{}],2:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, '__esModule', {
+    value: true
+});
+
+var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i['return']) _i['return'](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError('Invalid attempt to destructure non-iterable instance'); } }; })();
+
+exports.allPossibleMoves = allPossibleMoves;
+exports.emptyPositions = emptyPositions;
+exports.adjacentPositions = adjacentPositions;
+exports.matchingAdjacentPositions = matchingAdjacentPositions;
+exports.group = group;
+exports.liberties = liberties;
+exports.oppositeColor = oppositeColor;
+exports.isLegalMove = isLegalMove;
+exports.prettyString = prettyString;
+
+var _lodash = require('lodash');
+
+var _immutable = require('immutable');
+
+/**
+ * Value on a board representing a black stone.
+ */
+var BLACK = 'black';
+
+exports.BLACK = BLACK;
+/**
+ * Value on a board representing a white stone.
+ */
+var WHITE = 'white';
+
+exports.WHITE = WHITE;
+/**
+ * @private
+ */
+var EMPTY = null;
+
+exports.EMPTY = EMPTY;
+/**
+ * @private
+ */
+var SIZE_KEY = 'size';
+
+exports.SIZE_KEY = SIZE_KEY;
+/**
+ * @private
+ */
+
+function allPossibleMoves(size) {
+    return (0, _immutable.Set)((0, _lodash.flatten)((0, _lodash.map)((0, _lodash.range)(size), function (i) {
+        return (0, _lodash.map)((0, _lodash.zip)((0, _lodash.range)(size), (0, _lodash.fill)(Array(size), i)), _immutable.List);
+    })));
+}
+
+/**
+ * Returns unoccupied positions on the board.
+ *
+ * @private
+ * @param {Map} board
+ * @returns {Set}
+ */
+
+function emptyPositions(board) {
+    return allPossibleMoves(board.get(SIZE_KEY)).subtract(board.keys());
+}
+
+/**
+ * Gets the spaces immediately touching the passed position.
+ *
+ * Considers the board size and acts correctly on sides and corners.
+ *
+ * @private
+ * @param {Map} board
+ * @param {List} position
+ * @returns {Set}
+ */
+
+function adjacentPositions(board, position) {
+    var inc = function inc(i) {
+        return i + 1;
+    };
+    var dec = function dec(i) {
+        return i - 1;
+    };
+    var size = board.get(SIZE_KEY);
+    var x = position.first();
+    var y = position.last();
+
+    var check = (0, _lodash.compose)((0, _lodash.curry)(Math.min, 2)(size - 1), (0, _lodash.curry)(Math.max, 2)(0));
+
+    return (0, _immutable.Set)([[_lodash.identity, inc], [_lodash.identity, dec], [inc, _lodash.identity], [dec, _lodash.identity]].map(function (_ref) {
+        var _ref2 = _slicedToArray(_ref, 2);
+
+        var first = _ref2[0];
+        var last = _ref2[1];
+        return _immutable.List.of(check(first(x)), check(last(y)));
+    })).subtract(_immutable.Set.of(position));
+}
+
+/**
+ * Similar to {@link adjacentPositions}, but filters on a state.
+ *
+ * @private
+ * @param {Map} board
+ * @param {List} position
+ * @param {string} color
+ * @returns {Set}
+ */
+
+function matchingAdjacentPositions(board, position, color) {
+    if (color === undefined) {
+        color = board.get(position, EMPTY);
+    }
+
+    return adjacentPositions(board, position).filter(function (pos) {
+        return board.get(pos, EMPTY) === color;
+    });
+}
+
+/**
+ * Gets a set of positions of the logical group associated with the given position.
+ *
+ * @private
+ * @param {Map} board
+ * @param {List} position
+ * @returns {Set}
+ */
+
+function group(board, position) {
+    var found = (0, _immutable.Set)();
+    var queue = _immutable.Set.of(position);
+
+    while (!queue.isEmpty()) {
+        var current = queue.first();
+        var more_matching = matchingAdjacentPositions(board, current);
+
+        found = found.add(current);
+        queue = queue.rest().union(more_matching.subtract(found));
+    }
+
+    return found;
+}
+
+/**
+ * Counts liberties for the stone at the given position.
+ *
+ * @private
+ * @param {Map} board
+ * @param {List} position
+ * @returns {number}
+ */
+
+function liberties(board, position) {
+    return group(board, position).reduce(function (acc, pos) {
+        return acc.union(matchingAdjacentPositions(board, pos, EMPTY));
+    }, (0, _immutable.Set)()).size;
+}
+
+/**
+ * Returns {@link BLACK} if {@link WHITE}, {@link WHITE} if {@link BLACK}.
+ *
+ * @private
+ * @param {string} color
+ * @throws {string} when color is neither black nor white
+ * @returns {string}
+ */
+
+function oppositeColor(color) {
+    if (color !== BLACK && color !== WHITE) {
+        throw 'Must pass in a color';
+    }
+    return color === BLACK ? WHITE : BLACK;
+}
+
+/**
+ * Checks if given position is a valid play for the given color.
+ *
+ * @private
+ * @param {Map} board
+ * @param {List} position
+ * @param {List} color
+ * @returns {boolean}
+ */
+
+function isLegalMove(board, position, color) {
+    var will_have_liberty = liberties(board.set(position, color), position) > 0;
+    var will_kill_something = matchingAdjacentPositions(board, position, oppositeColor(color)).some(function (pos) {
+        return liberties(board, pos) === 1;
+    });
+
+    return will_have_liberty || will_kill_something;
+}
+
+/**
+ * @private
+ */
+
+function prettyString(board) {
+    var size = board.get(SIZE_KEY);
+    var pretty_string = '';
+
+    for (var i = 0; i < size; i++) {
+        for (var j = 0; j < size; j++) {
+            var color = board.get(_immutable.List.of(i, j), EMPTY);
+            switch (color) {
+                case BLACK:
+                    pretty_string += 'O';
+                    break;
+                case WHITE:
+                    pretty_string += 'X';
+                    break;
+                case EMPTY:
+                    pretty_string += '+';
+                    break;
+            }
+        }
+        pretty_string += '\n';
+    }
+    return pretty_string;
+}
+
+exports['default'] = {
+    isLegalMove: isLegalMove, oppositeColor: oppositeColor, liberties: liberties, group: group
+};
+
+},{"immutable":2,"lodash":9}],4:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, '__esModule', {
+    value: true
+});
+
+var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError('Cannot call a class as a function'); } }
+
+var _immutable = require('immutable');
+
+var _utils = require('./utils');
+
+var _analysis = require('./analysis');
+
+var _transforms = require('./transforms');
+
+function isValidBoardMap(board) {
+    return _immutable.Map.isMap(board) && (0, _utils.isPositiveInteger)(board.get(_analysis.SIZE_KEY, 0));
+}
+
+/**
+ * Represents a board state.
+ * @example
+ * var Immutable = require('immutable');
+ *
+ * var board1 = Board(19);
+ * var board2_data = Immutable.Map().set('size', 19);
+ * var board2 = Board(board2_data);
+ *
+ * assert(board1.equals(board2));
+ */
+
+var Board = (function () {
+    /**
+     * @param {Map} board_data argument specifying either the backing Map or the size
+     * @throws {TypeError} when board_data is neither a proper board Map or a positive integer
+     */
+
+    function Board(board_data) {
+        _classCallCheck(this, Board);
+
+        if (isValidBoardMap(board_data)) {
+            this._positions = board_data;
+        } else if ((0, _utils.isPositiveInteger)(board_data)) {
+            this._positions = (0, _transforms.emptyBoard)(board_data);
+        } else {
+            throw TypeError('Instantiate a Board with a Map or a positive integer');
+        }
+    }
+
+    /**
+     * Immutable data structure holding the positions in a {@link Map}.
+     *
+     * @returns {Map}
+     */
+
+    _createClass(Board, [{
+        key: 'addBlackMove',
+
+        /**
+         * Adds a black move at the specified position.  Follows the rules of go
+         * which means dead stones will be removed.
+         *
+         * @param {List} position
+         * @throws {string} when the move is not valid
+         * @returns {Board}
+         * @see {@link addMove}
+         */
+        value: function addBlackMove(position) {
+            return new Board((0, _transforms.addBlackMove)(this.positions, position));
+        }
+
+        /**
+         * Adds a white move at the specified position.  Follows the rules of go
+         * which means dead stones will be removed.
+         *
+         * @param {List} position
+         * @throws {string} when the move is not valid
+         * @returns {Board}
+         * @see {@link addMove}
+         */
+    }, {
+        key: 'addWhiteMove',
+        value: function addWhiteMove(position) {
+            return new Board((0, _transforms.addWhiteMove)(this.positions, position));
+        }
+
+        /**
+         * Adds a move at the specified position.  Follows the rules of go
+         * which means dead stones will be removed.
+         *
+         * @param {List} position
+         * @param {string} color
+         * @throws {string} when the move is not valid
+         * @returns {Board}
+         * @example
+         * var board = Board(3);
+         * var new_board = board.addBlackMove(position(1, 0));
+         *
+         * console.log(board.toPrettyString());
+         * // +++
+         * // +++
+         * // +++
+         * console.log(new_board.toPrettyString());
+         * // +++
+         * // O++
+         * // +++
+         *
+         * @example
+         * var board = Board(3)
+         *     .addBlackMove(position(0, 1))
+         *     .addBlackMove(position(2, 1))
+         *     .addBlackMove(position(1, 2))
+         *     .addWhiteMove(position(1, 1));
+         * var new_board.addBlackMove(position(1, 0));
+         *
+         * console.log(board.toPrettyString());
+         * // +O+
+         * // +XO
+         * // +O+
+         * console.log(new_board.toPrettyString());
+         * // +O+
+         * // O+O
+         * // +O+
+         */
+    }, {
+        key: 'addMove',
+        value: function addMove(position, color) {
+            return new Board((0, _transforms.addMove)(this.positions, position, color));
+        }
+
+        /**
+         * Removes positions.  Positions that are not on the board are ignored.
+         *
+         * @param {Set} positions
+         * @returns {Board}
+         */
+    }, {
+        key: 'removeMoves',
+        value: function removeMoves(positions) {
+            return new Board((0, _transforms.removeMoves)(this.positions, positions));
+        }
+
+        /**
+         * A set of all possible moves on the board, even the occupied ones.
+         *
+         * @returns {Set} contains Lists (2-tuples)
+         */
+    }, {
+        key: 'allPossibleMoves',
+        value: function allPossibleMoves() {
+            return (0, _analysis.allPossibleMoves)(this.board_size);
+        }
+
+        /**
+         * Gets a set of positions of the logical group associated with the given position.
+         *
+         * @param {List} position
+         * @returns {Set}
+         */
+    }, {
+        key: 'group',
+        value: function group(position) {
+            return (0, _analysis.group)(this.positions, position);
+        }
+
+        /**
+         * Check if a move is legal for black
+         *
+         * @param {List} position
+         * @returns {boolean}
+         */
+    }, {
+        key: 'isLegalBlackMove',
+        value: function isLegalBlackMove(position) {
+            return (0, _analysis.isLegalMove)(this.positions, position, _analysis.BLACK);
+        }
+
+        /**
+         * Check if a move is legal for white
+         *
+         * @param {List} position
+         * @returns {boolean}
+         */
+    }, {
+        key: 'isLegalWhiteMove',
+        value: function isLegalWhiteMove(position) {
+            return (0, _analysis.isLegalMove)(this.positions, position, _analysis.WHITE);
+        }
+
+        /**
+         * Counts liberties for the stone at the given position.
+         *
+         * @param {List} position
+         * @returns {number}
+         */
+    }, {
+        key: 'liberties',
+        value: function liberties(position) {
+            return (0, _analysis.liberties)(this.positions, position);
+        }
+
+        /**
+         * Compare with another board.
+         *
+         * @param {*} other_board Board or Board.positions
+         * @returns {boolean}
+         */
+    }, {
+        key: 'equals',
+        value: function equals(other_board) {
+            if (!other_board) {
+                throw TypeError('Pass in another board to compare');
+            }
+
+            return this.positions.equals(other_board.positions || other_board);
+        }
+
+        /**
+         * @returns {string} ASCII board
+         */
+    }, {
+        key: 'toPrettyString',
+        value: function toPrettyString() {
+            return (0, _analysis.prettyString)(this.positions);
+        }
+    }, {
+        key: 'positions',
+        get: function get() {
+            return this._positions;
+        }
+
+        /**
+         * Positive integer representing the size of the board.
+         *
+         * @returns {number}
+         */
+    }, {
+        key: 'board_size',
+        get: function get() {
+            return this.positions.get(_analysis.SIZE_KEY);
+        }
+    }]);
+
+    return Board;
+})();
+
+exports.Board = Board;
+
+},{"./analysis":3,"./transforms":7,"./utils":8,"immutable":2}],5:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, '__esModule', {
+  value: true
+});
+var _bind = Function.prototype.bind;
+
+var _analysis = require('./analysis');
+
+var _board = require('./board');
+
+var _position = require('./position');
+
+/**
+ * @external {Map} http://facebook.github.io/immutable-js/docs/#/Map
+ */
+
+/**
+ * @external {List} http://facebook.github.io/immutable-js/docs/#/List
+ */
+
+/**
+ * @external {Set} http://facebook.github.io/immutable-js/docs/#/Set
+ */
+
+function _Board() {
+  for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+    args[_key] = arguments[_key];
+  }
+
+  return new (_bind.apply(_board.Board, [null].concat(args)))();
+}
+
+_Board.prototype = _board.Board.prototype;
+
+exports['default'] = {
+  Board: _Board,
+  position: _position.position,
+  isValidPosition: _position.isValidPosition,
+  BLACK: _analysis.BLACK,
+  WHITE: _analysis.WHITE
+};
+module.exports = exports['default'];
+
+},{"./analysis":3,"./board":4,"./position":6}],6:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, '__esModule', {
+    value: true
+});
+exports.position = position;
+exports.isValidPosition = isValidPosition;
+exports.positions = positions;
+
+var _immutable = require('immutable');
+
+var _utils = require('./utils');
+
+/**
+ * Returns a coordinate type compatible with the rest of godash.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @returns {List} representing a possible coordinate on the board
+ * @throws {TypeError} arguments are not integers greater than or equal to 0
+ */
+
+function position(x, y) {
+    var valid_x = x === 0 || (0, _utils.isPositiveInteger)(x);
+    var valid_y = y === 0 || (0, _utils.isPositiveInteger)(y);
+
+    if (!valid_x || !valid_y) {
+        throw TypeError('Both passed arguments must be integers greater than or equal to 0');
+    }
+
+    return _immutable.List.of(x, y);
+}
+
+/**
+ * Validates a position with a board size.
+ *
+ * @returns {boolean}
+ */
+
+function isValidPosition(position, board_size) {
+    return matchesPositionType(position) && position.every(function (val) {
+        return val < board_size;
+    });
+}
+
+function matchesPositionType(position) {
+    return _immutable.List.isList(position) && position.size === 2 && position.every(_utils.isPositiveInteger);
+}
+
+/**
+ * Returns a {@link Set} of positions compatible with areas of godash that need a collection
+ * of positions.
+ *
+ * @param {*} raw_positions anything that is compatible with the constructor arguments for Set
+ * @returns {Set}
+ */
+
+function positions(raw_positions) {
+    var position_set = (0, _immutable.Set)(raw_positions);
+
+    if (!position_set.every(matchesPositionType)) {
+        throw TypeError('Must pass an iterable of positions,' + ' Immutable.List types of length 2, containing non-negative integers');
+    }
+
+    return position_set;
+}
+
+},{"./utils":8,"immutable":2}],7:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, '__esModule', {
+    value: true
+});
+exports.emptyBoard = emptyBoard;
+exports.addMove = addMove;
+exports.addBlackMove = addBlackMove;
+exports.addWhiteMove = addWhiteMove;
+exports.removeMoves = removeMoves;
+
+var _lodash = require('lodash');
+
+var _immutable = require('immutable');
+
+var _analysis = require('./analysis');
+
+/**
+ * @private
+ */
+
+function emptyBoard(size) {
+    if (!(0, _lodash.isNumber)(size) || size <= 0 || size !== parseInt(size)) {
+        throw 'An empty board must be created from a positive integer.';
+    }
+
+    return (0, _immutable.Map)().set(_analysis.SIZE_KEY, size);
+}
+
+/**
+ * @private
+ */
+
+function addMove(board, position, color) {
+    if (!(0, _analysis.isLegalMove)(board, position, color)) {
+        throw 'Not a valid position';
+    }
+
+    if (board.has(position)) {
+        throw 'There is already a stone there';
+    }
+
+    var killed = (0, _analysis.matchingAdjacentPositions)(board, position, (0, _analysis.oppositeColor)(color)).reduce(function (acc, pos) {
+        return acc.union((0, _analysis.liberties)(board, pos) === 1 ? (0, _analysis.group)(board, pos) : (0, _immutable.Set)());
+    }, (0, _immutable.Set)());
+
+    return removeMoves(board, killed).set(position, color);
+}
+
+/**
+ * @private
+ */
+
+function addBlackMove(board, position) {
+    return addMove(board, position, _analysis.BLACK);
+}
+
+/**
+ * @private
+ */
+
+function addWhiteMove(board, position) {
+    return addMove(board, position, _analysis.WHITE);
+}
+
+/**
+ * @private
+ */
+
+function removeMoves(board, positions) {
+    return positions.reduce(function (acc, position) {
+        return acc['delete'](position);
+    }, board);
+}
+
+exports['default'] = {
+    emptyBoard: emptyBoard, addBlackMove: addBlackMove, addWhiteMove: addWhiteMove, removeMoves: removeMoves
+};
+
+},{"./analysis":3,"immutable":2,"lodash":9}],8:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, '__esModule', {
+  value: true
+});
+exports.isPositiveInteger = isPositiveInteger;
+
+var _lodash = require('lodash');
+
+/**
+ * @private
+ */
+
+function isPositiveInteger(num) {
+  return (0, _lodash.isNumber)(num) && num === parseInt(num) && num > 0;
+}
+
+},{"lodash":9}],9:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -17314,691 +18098,7 @@ require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof requ
 }.call(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],3:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, '__esModule', {
-    value: true
-});
-
-var _slicedToArray = (function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i['return']) _i['return'](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError('Invalid attempt to destructure non-iterable instance'); } }; })();
-
-exports.allPossibleMoves = allPossibleMoves;
-exports.emptyPositions = emptyPositions;
-exports.adjacentPositions = adjacentPositions;
-exports.matchingAdjacentPositions = matchingAdjacentPositions;
-exports.group = group;
-exports.liberties = liberties;
-exports.oppositeColor = oppositeColor;
-exports.isLegalMove = isLegalMove;
-
-var _lodash = require('lodash');
-
-var _immutable = require('immutable');
-
-/**
- * Value on a board representing a black stone.
- */
-var BLACK = 'black';
-
-exports.BLACK = BLACK;
-/**
- * Value on a board representing a white stone.
- */
-var WHITE = 'white';
-
-exports.WHITE = WHITE;
-/**
- * @private
- */
-var EMPTY = null;
-
-exports.EMPTY = EMPTY;
-/**
- * @private
- */
-var SIZE_KEY = 'size';
-
-exports.SIZE_KEY = SIZE_KEY;
-/**
- * @private
- */
-
-function allPossibleMoves(size) {
-    return (0, _immutable.Set)((0, _lodash.flatten)((0, _lodash.map)((0, _lodash.range)(size), function (i) {
-        return (0, _lodash.map)((0, _lodash.zip)((0, _lodash.range)(size), (0, _lodash.fill)(Array(size), i)), _immutable.List);
-    })));
-}
-
-/**
- * Returns unoccupied positions on the board.
- *
- * @private
- * @param {Map} board
- * @returns {Set}
- */
-
-function emptyPositions(board) {
-    return allPossibleMoves(board.get(SIZE_KEY)).subtract(board.keys());
-}
-
-/**
- * Gets the spaces immediately touching the passed position.
- *
- * Considers the board size and acts correctly on sides and corners.
- *
- * @private
- * @param {Map} board
- * @param {List} position
- * @returns {Set}
- */
-
-function adjacentPositions(board, position) {
-    var inc = function inc(i) {
-        return i + 1;
-    };
-    var dec = function dec(i) {
-        return i - 1;
-    };
-    var size = board.get(SIZE_KEY);
-    var x = position.first();
-    var y = position.last();
-
-    var check = (0, _lodash.compose)((0, _lodash.curry)(Math.min, 2)(size - 1), (0, _lodash.curry)(Math.max, 2)(0));
-
-    return (0, _immutable.Set)([[_lodash.identity, inc], [_lodash.identity, dec], [inc, _lodash.identity], [dec, _lodash.identity]].map(function (_ref) {
-        var _ref2 = _slicedToArray(_ref, 2);
-
-        var first = _ref2[0];
-        var last = _ref2[1];
-        return _immutable.List.of(check(first(x)), check(last(y)));
-    })).subtract(_immutable.Set.of(position));
-}
-
-/**
- * Similar to {@link adjacentPositions}, but filters on a state.
- *
- * @private
- * @param {Map} board
- * @param {List} position
- * @param {string} color
- * @returns {Set}
- */
-
-function matchingAdjacentPositions(board, position, color) {
-    if (color === undefined) {
-        color = board.get(position, EMPTY);
-    }
-
-    return adjacentPositions(board, position).filter(function (pos) {
-        return board.get(pos, EMPTY) === color;
-    });
-}
-
-/**
- * Gets a set of positions of the logical group associated with the given position.
- *
- * @private
- * @param {Map} board
- * @param {List} position
- * @returns {Set}
- */
-
-function group(board, position) {
-    var found = (0, _immutable.Set)();
-    var queue = _immutable.Set.of(position);
-
-    while (!queue.isEmpty()) {
-        var current = queue.first();
-        var more_matching = matchingAdjacentPositions(board, position);
-
-        queue = queue.rest().union(more_matching.subtract(found));
-        found = found.add(current);
-    }
-
-    return found;
-}
-
-/**
- * Counts liberties for the stone at the given position.
- *
- * @private
- * @param {Map} board
- * @param {List} position
- * @returns {number}
- */
-
-function liberties(board, position) {
-    return group(board, position).reduce(function (acc, pos) {
-        return acc.union(matchingAdjacentPositions(board, pos, EMPTY));
-    }, (0, _immutable.Set)()).size;
-}
-
-/**
- * Returns {@link BLACK} if {@link WHITE}, {@link WHITE} if {@link BLACK}.
- *
- * @private
- * @param {string} color
- * @throws {string} when color is neither black nor white
- * @returns {string}
- */
-
-function oppositeColor(color) {
-    if (color !== BLACK && color !== WHITE) {
-        throw 'Must pass in a color';
-    }
-    return color === BLACK ? WHITE : BLACK;
-}
-
-/**
- * Checks if given position is a valid play for the given color.
- *
- * @private
- * @param {Map} board
- * @param {List} position
- * @param {List} color
- * @returns {boolean}
- */
-
-function isLegalMove(board, position, color) {
-    var will_have_liberty = liberties(board.set(position, color), position) > 0;
-    var will_kill_something = matchingAdjacentPositions(board, position, oppositeColor(color)).some(function (pos) {
-        return liberties(board, pos) === 1;
-    });
-
-    return will_have_liberty || will_kill_something;
-}
-
-exports['default'] = {
-    isLegalMove: isLegalMove, oppositeColor: oppositeColor, liberties: liberties, group: group
-};
-
-},{"immutable":1,"lodash":2}],4:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, '__esModule', {
-    value: true
-});
-
-var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError('Cannot call a class as a function'); } }
-
-var _immutable = require('immutable');
-
-var _utils = require('./utils');
-
-var _analysis = require('./analysis');
-
-var _transforms = require('./transforms');
-
-function isValidBoardMap(board) {
-    return _immutable.Map.isMap(board) && (0, _utils.isPositiveInteger)(board.get(_analysis.SIZE_KEY, 0));
-}
-
-/**
- * Represents a board state.
- * @example
- * var Immutable = require('immutable');
- *
- * var board1 = Board(19);
- * var board2_data = Immutable.Map().set('size', 19);
- * var board2 = Board(board2_data);
- *
- * assert(board1.equals(board2));
- */
-
-var Board = (function () {
-    /**
-     * @param {Map} board_data argument specifying either the backing Map or the size
-     * @throws {TypeError} when board_data is neither a proper board Map or a positive integer
-     */
-
-    function Board(board_data) {
-        _classCallCheck(this, Board);
-
-        if (isValidBoardMap(board_data)) {
-            this._positions = board_data;
-        } else if ((0, _utils.isPositiveInteger)(board_data)) {
-            this._positions = (0, _transforms.emptyBoard)(board_data);
-        } else {
-            throw TypeError('Instantiate a Board with a Map or a positive integer');
-        }
-    }
-
-    /**
-     * Immutable data structure holding the positions in a {@link Map}.
-     *
-     * @returns {Map}
-     */
-
-    _createClass(Board, [{
-        key: 'addBlackMove',
-
-        /**
-         * Adds a black move at the specified position.  Follows the rules of go
-         * which means dead stones will be removed.
-         *
-         * @param {List} position
-         * @throws {string} when the move is not valid
-         * @returns {Board}
-         * @see {@link addMove}
-         */
-        value: function addBlackMove(position) {
-            return new Board((0, _transforms.addBlackMove)(this.positions, position));
-        }
-
-        /**
-         * Adds a white move at the specified position.  Follows the rules of go
-         * which means dead stones will be removed.
-         *
-         * @param {List} position
-         * @throws {string} when the move is not valid
-         * @returns {Board}
-         * @see {@link addMove}
-         */
-    }, {
-        key: 'addWhiteMove',
-        value: function addWhiteMove(position) {
-            return new Board((0, _transforms.addWhiteMove)(this.positions, position));
-        }
-
-        /**
-         * Adds a move at the specified position.  Follows the rules of go
-         * which means dead stones will be removed.
-         *
-         * @param {List} position
-         * @param {string} color
-         * @throws {string} when the move is not valid
-         * @returns {Board}
-         * @example
-         * var board = Board(3);
-         * var new_board = board.addBlackMove(position(1, 0));
-         *
-         * console.log(board.toPrettyString());
-         * // +++
-         * // +++
-         * // +++
-         * console.log(new_board.toPrettyString());
-         * // +++
-         * // O++
-         * // +++
-         *
-         * @example
-         * var board = Board(3)
-         *     .addBlackMove(position(0, 1))
-         *     .addBlackMove(position(2, 1))
-         *     .addBlackMove(position(1, 2))
-         *     .addWhiteMove(position(1, 1));
-         * var new_board.addBlackMove(position(1, 0));
-         *
-         * console.log(board.toPrettyString());
-         * // +O+
-         * // +XO
-         * // +O+
-         * console.log(new_board.toPrettyString());
-         * // +O+
-         * // O+O
-         * // +O+
-         */
-    }, {
-        key: 'addMove',
-        value: function addMove(position, color) {
-            return new Board((0, _transforms.addMove)(this.positions, position, color));
-        }
-
-        /**
-         * Removes positions.  Positions that are not on the board are ignored.
-         *
-         * @param {Set} positions
-         * @returns {Board}
-         */
-    }, {
-        key: 'removeMoves',
-        value: function removeMoves(positions) {
-            return new Board((0, _transforms.removeMoves)(this.positions, positions));
-        }
-
-        /**
-         * A set of all possible moves on the board, even the occupied ones.
-         *
-         * @returns {Set} contains Lists (2-tuples)
-         */
-    }, {
-        key: 'allPossibleMoves',
-        value: function allPossibleMoves() {
-            return (0, _analysis.allPossibleMoves)(this.board_size);
-        }
-
-        /**
-         * Gets a set of positions of the logical group associated with the given position.
-         *
-         * @param {List} position
-         * @returns {Set}
-         */
-    }, {
-        key: 'group',
-        value: function group(position) {
-            return (0, _analysis.group)(this.positions, position);
-        }
-
-        /**
-         * Check if a move is legal for black
-         *
-         * @param {List} position
-         * @returns {boolean}
-         */
-    }, {
-        key: 'isLegalBlackMove',
-        value: function isLegalBlackMove(position) {
-            return (0, _analysis.isLegalMove)(this.positions, position, _analysis.BLACK);
-        }
-
-        /**
-         * Check if a move is legal for white
-         *
-         * @param {List} position
-         * @returns {boolean}
-         */
-    }, {
-        key: 'isLegalWhiteMove',
-        value: function isLegalWhiteMove(position) {
-            return (0, _analysis.isLegalMove)(this.positions, position, _analysis.WHITE);
-        }
-
-        /**
-         * Counts liberties for the stone at the given position.
-         *
-         * @param {List} position
-         * @returns {number}
-         */
-    }, {
-        key: 'liberties',
-        value: function liberties(position) {
-            return (0, _analysis.liberties)(this.positions, position);
-        }
-
-        /**
-         * Compare with another board.
-         *
-         * @param {*} other_board Board or Board.positions
-         * @returns {boolean}
-         */
-    }, {
-        key: 'equals',
-        value: function equals(other_board) {
-            if (!other_board) {
-                throw TypeError('Pass in another board to compare');
-            }
-
-            return this.positions.equals(other_board.positions || other_board);
-        }
-
-        /**
-         * @returns {string} ASCII board
-         */
-    }, {
-        key: 'toPrettyString',
-        value: function toPrettyString() {
-            var size = this.board_size;
-            var pretty_string = '';
-
-            for (var i = 0; i < this.board_size; i++) {
-                for (var j = 0; j < this.board_size; j++) {
-                    var color = this.positions.get(_immutable.List.of(i, j), _analysis.EMPTY);
-                    switch (color) {
-                        case _analysis.BLACK:
-                            pretty_string += 'O';
-                            break;
-                        case _analysis.WHITE:
-                            pretty_string += 'X';
-                            break;
-                        case _analysis.EMPTY:
-                            pretty_string += '+';
-                            break;
-                    }
-                }
-                pretty_string += '\n';
-            }
-            return pretty_string;
-        }
-    }, {
-        key: 'positions',
-        get: function get() {
-            return this._positions;
-        }
-
-        /**
-         * Positive integer representing the size of the board.
-         *
-         * @returns {number}
-         */
-    }, {
-        key: 'board_size',
-        get: function get() {
-            return this.positions.get(_analysis.SIZE_KEY);
-        }
-    }]);
-
-    return Board;
-})();
-
-exports.Board = Board;
-
-},{"./analysis":3,"./transforms":7,"./utils":8,"immutable":1}],5:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, '__esModule', {
-  value: true
-});
-var _bind = Function.prototype.bind;
-
-var _analysis = require('./analysis');
-
-var _board = require('./board');
-
-var _position = require('./position');
-
-/**
- * @external {Map} http://facebook.github.io/immutable-js/docs/#/Map
- */
-
-/**
- * @external {List} http://facebook.github.io/immutable-js/docs/#/List
- */
-
-/**
- * @external {Set} http://facebook.github.io/immutable-js/docs/#/Set
- */
-
-function _Board() {
-  for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
-    args[_key] = arguments[_key];
-  }
-
-  return new (_bind.apply(_board.Board, [null].concat(args)))();
-}
-
-_Board.prototype = _board.Board.prototype;
-
-exports['default'] = {
-  Board: _Board,
-  position: _position.position,
-  isValidPosition: _position.isValidPosition,
-  BLACK: _analysis.BLACK,
-  WHITE: _analysis.WHITE
-};
-module.exports = exports['default'];
-
-},{"./analysis":3,"./board":4,"./position":6}],6:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, '__esModule', {
-    value: true
-});
-exports.position = position;
-exports.isValidPosition = isValidPosition;
-exports.positions = positions;
-
-var _immutable = require('immutable');
-
-var _utils = require('./utils');
-
-/**
- * Returns a coordinate type compatible with the rest of godash.
- *
- * @param {number} x
- * @param {number} y
- * @returns {List} representing a possible coordinate on the board
- * @throws {TypeError} arguments are not integers greater than or equal to 0
- */
-
-function position(x, y) {
-    var valid_x = x === 0 || (0, _utils.isPositiveInteger)(x);
-    var valid_y = y === 0 || (0, _utils.isPositiveInteger)(y);
-
-    if (!valid_x || !valid_y) {
-        throw TypeError('Both passed arguments must be integers greater than or equal to 0');
-    }
-
-    return _immutable.List.of(x, y);
-}
-
-/**
- * Validates a position with a board size.
- *
- * @returns {boolean}
- */
-
-function isValidPosition(position, board_size) {
-    return matchesPositionType(position) && position.every(function (val) {
-        return val < board_size;
-    });
-}
-
-function matchesPositionType(position) {
-    return _immutable.List.isList(position) && position.size === 2 && position.every(_utils.isPositiveInteger);
-}
-
-/**
- * Returns a {@link Set} of positions compatible with areas of godash that need a collection
- * of positions.
- *
- * @param {*} raw_positions anything that is compatible with the constructor arguments for Set
- * @returns {Set}
- */
-
-function positions(raw_positions) {
-    var position_set = (0, _immutable.Set)(raw_positions);
-
-    if (!position_set.every(matchesPositionType)) {
-        throw TypeError('Must pass an iterable of positions,' + ' Immutable.List types of length 2, containing non-negative integers');
-    }
-
-    return position_set;
-}
-
-},{"./utils":8,"immutable":1}],7:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, '__esModule', {
-    value: true
-});
-exports.emptyBoard = emptyBoard;
-exports.addMove = addMove;
-exports.addBlackMove = addBlackMove;
-exports.addWhiteMove = addWhiteMove;
-exports.removeMoves = removeMoves;
-
-var _lodash = require('lodash');
-
-var _immutable = require('immutable');
-
-var _analysis = require('./analysis');
-
-/**
- * @private
- */
-
-function emptyBoard(size) {
-    if (!(0, _lodash.isNumber)(size) || size <= 0 || size !== parseInt(size)) {
-        throw 'An empty board must be created from a positive integer.';
-    }
-
-    return (0, _immutable.Map)().set(_analysis.SIZE_KEY, size);
-}
-
-/**
- * @private
- */
-
-function addMove(board, position, color) {
-    if (!(0, _analysis.isLegalMove)(board, position, color)) {
-        throw 'Not a valid position';
-    }
-
-    if (board.has(position)) {
-        throw 'There is already a stone there';
-    }
-
-    var killed = (0, _analysis.matchingAdjacentPositions)(board, position, (0, _analysis.oppositeColor)(color)).reduce(function (acc, pos) {
-        return acc.union((0, _analysis.liberties)(board, pos) === 1 ? (0, _analysis.group)(board, pos) : (0, _immutable.Set)());
-    }, (0, _immutable.Set)());
-
-    return removeMoves(board, killed).set(position, color);
-}
-
-/**
- * @private
- */
-
-function addBlackMove(board, position) {
-    return addMove(board, position, _analysis.BLACK);
-}
-
-/**
- * @private
- */
-
-function addWhiteMove(board, position) {
-    return addMove(board, position, _analysis.WHITE);
-}
-
-/**
- * @private
- */
-
-function removeMoves(board, positions) {
-    return positions.reduce(function (acc, position) {
-        return acc['delete'](position);
-    }, board);
-}
-
-exports['default'] = {
-    emptyBoard: emptyBoard, addBlackMove: addBlackMove, addWhiteMove: addWhiteMove, removeMoves: removeMoves
-};
-
-},{"./analysis":3,"immutable":1,"lodash":2}],8:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, '__esModule', {
-  value: true
-});
-exports.isPositiveInteger = isPositiveInteger;
-
-var _lodash = require('lodash');
-
-/**
- * @private
- */
-
-function isPositiveInteger(num) {
-  return (0, _lodash.isNumber)(num) && num === parseInt(num) && num > 0;
-}
-
-},{"lodash":2}],9:[function(require,module,exports){
-arguments[4][2][0].apply(exports,arguments)
-},{"dup":2}],10:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -18827,7 +18927,7 @@ var CSSPropertyOperations = {
 module.exports = CSSPropertyOperations;
 
 }).call(this,require('_process'))
-},{"./CSSProperty":12,"./ExecutionEnvironment":29,"./camelizeStyleName":117,"./dangerousStyleValue":122,"./hyphenateStyleName":142,"./memoizeStringOnly":152,"./warning":163,"_process":167}],14:[function(require,module,exports){
+},{"./CSSProperty":12,"./ExecutionEnvironment":29,"./camelizeStyleName":117,"./dangerousStyleValue":122,"./hyphenateStyleName":142,"./memoizeStringOnly":152,"./warning":163,"_process":1}],14:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -18927,7 +19027,7 @@ PooledClass.addPoolingTo(CallbackQueue);
 module.exports = CallbackQueue;
 
 }).call(this,require('_process'))
-},{"./Object.assign":35,"./PooledClass":36,"./invariant":144,"_process":167}],15:[function(require,module,exports){
+},{"./Object.assign":35,"./PooledClass":36,"./invariant":144,"_process":1}],15:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -19472,7 +19572,7 @@ var DOMChildrenOperations = {
 module.exports = DOMChildrenOperations;
 
 }).call(this,require('_process'))
-},{"./Danger":20,"./ReactMultiChildUpdateTypes":81,"./invariant":144,"./setTextContent":158,"_process":167}],18:[function(require,module,exports){
+},{"./Danger":20,"./ReactMultiChildUpdateTypes":81,"./invariant":144,"./setTextContent":158,"_process":1}],18:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -19771,7 +19871,7 @@ var DOMProperty = {
 module.exports = DOMProperty;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],19:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],19:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -19963,7 +20063,7 @@ var DOMPropertyOperations = {
 module.exports = DOMPropertyOperations;
 
 }).call(this,require('_process'))
-},{"./DOMProperty":18,"./quoteAttributeValueForBrowser":156,"./warning":163,"_process":167}],20:[function(require,module,exports){
+},{"./DOMProperty":18,"./quoteAttributeValueForBrowser":156,"./warning":163,"_process":1}],20:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -20150,7 +20250,7 @@ var Danger = {
 module.exports = Danger;
 
 }).call(this,require('_process'))
-},{"./ExecutionEnvironment":29,"./createNodesFromMarkup":121,"./emptyFunction":123,"./getMarkupWrap":136,"./invariant":144,"_process":167}],21:[function(require,module,exports){
+},{"./ExecutionEnvironment":29,"./createNodesFromMarkup":121,"./emptyFunction":123,"./getMarkupWrap":136,"./invariant":144,"_process":1}],21:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -20491,7 +20591,7 @@ var EventListener = {
 module.exports = EventListener;
 
 }).call(this,require('_process'))
-},{"./emptyFunction":123,"_process":167}],25:[function(require,module,exports){
+},{"./emptyFunction":123,"_process":1}],25:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -20769,7 +20869,7 @@ var EventPluginHub = {
 module.exports = EventPluginHub;
 
 }).call(this,require('_process'))
-},{"./EventPluginRegistry":26,"./EventPluginUtils":27,"./accumulateInto":114,"./forEachAccumulated":129,"./invariant":144,"_process":167}],26:[function(require,module,exports){
+},{"./EventPluginRegistry":26,"./EventPluginUtils":27,"./accumulateInto":114,"./forEachAccumulated":129,"./invariant":144,"_process":1}],26:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -21049,7 +21149,7 @@ var EventPluginRegistry = {
 module.exports = EventPluginRegistry;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],27:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],27:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -21270,7 +21370,7 @@ var EventPluginUtils = {
 module.exports = EventPluginUtils;
 
 }).call(this,require('_process'))
-},{"./EventConstants":23,"./invariant":144,"_process":167}],28:[function(require,module,exports){
+},{"./EventConstants":23,"./invariant":144,"_process":1}],28:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -21412,7 +21512,7 @@ var EventPropagators = {
 module.exports = EventPropagators;
 
 }).call(this,require('_process'))
-},{"./EventConstants":23,"./EventPluginHub":25,"./accumulateInto":114,"./forEachAccumulated":129,"_process":167}],29:[function(require,module,exports){
+},{"./EventConstants":23,"./EventPluginHub":25,"./accumulateInto":114,"./forEachAccumulated":129,"_process":1}],29:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -21914,7 +22014,7 @@ var LinkedValueUtils = {
 module.exports = LinkedValueUtils;
 
 }).call(this,require('_process'))
-},{"./ReactPropTypes":87,"./invariant":144,"_process":167}],33:[function(require,module,exports){
+},{"./ReactPropTypes":87,"./invariant":144,"_process":1}],33:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -21971,7 +22071,7 @@ var LocalEventTrapMixin = {
 module.exports = LocalEventTrapMixin;
 
 }).call(this,require('_process'))
-},{"./ReactBrowserEventEmitter":39,"./accumulateInto":114,"./forEachAccumulated":129,"./invariant":144,"_process":167}],34:[function(require,module,exports){
+},{"./ReactBrowserEventEmitter":39,"./accumulateInto":114,"./forEachAccumulated":129,"./invariant":144,"_process":1}],34:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -22194,7 +22294,7 @@ var PooledClass = {
 module.exports = PooledClass;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],37:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],37:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -22346,7 +22446,7 @@ React.version = '0.13.3';
 module.exports = React;
 
 }).call(this,require('_process'))
-},{"./EventPluginUtils":27,"./ExecutionEnvironment":29,"./Object.assign":35,"./ReactChildren":41,"./ReactClass":42,"./ReactComponent":43,"./ReactContext":47,"./ReactCurrentOwner":48,"./ReactDOM":49,"./ReactDOMTextComponent":60,"./ReactDefaultInjection":63,"./ReactElement":66,"./ReactElementValidator":67,"./ReactInstanceHandles":75,"./ReactMount":79,"./ReactPerf":84,"./ReactPropTypes":87,"./ReactReconciler":90,"./ReactServerRendering":93,"./findDOMNode":126,"./onlyChild":153,"_process":167}],38:[function(require,module,exports){
+},{"./EventPluginUtils":27,"./ExecutionEnvironment":29,"./Object.assign":35,"./ReactChildren":41,"./ReactClass":42,"./ReactComponent":43,"./ReactContext":47,"./ReactCurrentOwner":48,"./ReactDOM":49,"./ReactDOMTextComponent":60,"./ReactDefaultInjection":63,"./ReactElement":66,"./ReactElementValidator":67,"./ReactInstanceHandles":75,"./ReactMount":79,"./ReactPerf":84,"./ReactPropTypes":87,"./ReactReconciler":90,"./ReactServerRendering":93,"./findDOMNode":126,"./onlyChild":153,"_process":1}],38:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -23010,7 +23110,7 @@ var ReactChildren = {
 module.exports = ReactChildren;
 
 }).call(this,require('_process'))
-},{"./PooledClass":36,"./ReactFragment":72,"./traverseAllChildren":162,"./warning":163,"_process":167}],42:[function(require,module,exports){
+},{"./PooledClass":36,"./ReactFragment":72,"./traverseAllChildren":162,"./warning":163,"_process":1}],42:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -23956,7 +24056,7 @@ var ReactClass = {
 module.exports = ReactClass;
 
 }).call(this,require('_process'))
-},{"./Object.assign":35,"./ReactComponent":43,"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactErrorUtils":69,"./ReactInstanceMap":76,"./ReactLifeCycle":77,"./ReactPropTypeLocationNames":85,"./ReactPropTypeLocations":86,"./ReactUpdateQueue":95,"./invariant":144,"./keyMirror":149,"./keyOf":150,"./warning":163,"_process":167}],43:[function(require,module,exports){
+},{"./Object.assign":35,"./ReactComponent":43,"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactErrorUtils":69,"./ReactInstanceMap":76,"./ReactLifeCycle":77,"./ReactPropTypeLocationNames":85,"./ReactPropTypeLocations":86,"./ReactUpdateQueue":95,"./invariant":144,"./keyMirror":149,"./keyOf":150,"./warning":163,"_process":1}],43:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -24110,7 +24210,7 @@ if ("production" !== process.env.NODE_ENV) {
 module.exports = ReactComponent;
 
 }).call(this,require('_process'))
-},{"./ReactUpdateQueue":95,"./invariant":144,"./warning":163,"_process":167}],44:[function(require,module,exports){
+},{"./ReactUpdateQueue":95,"./invariant":144,"./warning":163,"_process":1}],44:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -24218,7 +24318,7 @@ var ReactComponentEnvironment = {
 module.exports = ReactComponentEnvironment;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],46:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],46:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -25131,7 +25231,7 @@ var ReactCompositeComponent = {
 module.exports = ReactCompositeComponent;
 
 }).call(this,require('_process'))
-},{"./Object.assign":35,"./ReactComponentEnvironment":45,"./ReactContext":47,"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactElementValidator":67,"./ReactInstanceMap":76,"./ReactLifeCycle":77,"./ReactNativeComponent":82,"./ReactPerf":84,"./ReactPropTypeLocationNames":85,"./ReactPropTypeLocations":86,"./ReactReconciler":90,"./ReactUpdates":96,"./emptyObject":124,"./invariant":144,"./shouldUpdateReactComponent":160,"./warning":163,"_process":167}],47:[function(require,module,exports){
+},{"./Object.assign":35,"./ReactComponentEnvironment":45,"./ReactContext":47,"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactElementValidator":67,"./ReactInstanceMap":76,"./ReactLifeCycle":77,"./ReactNativeComponent":82,"./ReactPerf":84,"./ReactPropTypeLocationNames":85,"./ReactPropTypeLocations":86,"./ReactReconciler":90,"./ReactUpdates":96,"./emptyObject":124,"./invariant":144,"./shouldUpdateReactComponent":160,"./warning":163,"_process":1}],47:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -25209,7 +25309,7 @@ var ReactContext = {
 module.exports = ReactContext;
 
 }).call(this,require('_process'))
-},{"./Object.assign":35,"./emptyObject":124,"./warning":163,"_process":167}],48:[function(require,module,exports){
+},{"./Object.assign":35,"./emptyObject":124,"./warning":163,"_process":1}],48:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -25422,7 +25522,7 @@ var ReactDOM = mapObject({
 module.exports = ReactDOM;
 
 }).call(this,require('_process'))
-},{"./ReactElement":66,"./ReactElementValidator":67,"./mapObject":151,"_process":167}],50:[function(require,module,exports){
+},{"./ReactElement":66,"./ReactElementValidator":67,"./mapObject":151,"_process":1}],50:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -25996,7 +26096,7 @@ ReactDOMComponent.injection = {
 module.exports = ReactDOMComponent;
 
 }).call(this,require('_process'))
-},{"./CSSPropertyOperations":13,"./DOMProperty":18,"./DOMPropertyOperations":19,"./Object.assign":35,"./ReactBrowserEventEmitter":39,"./ReactComponentBrowserEnvironment":44,"./ReactMount":79,"./ReactMultiChild":80,"./ReactPerf":84,"./escapeTextContentForBrowser":125,"./invariant":144,"./isEventSupported":145,"./keyOf":150,"./warning":163,"_process":167}],52:[function(require,module,exports){
+},{"./CSSPropertyOperations":13,"./DOMProperty":18,"./DOMPropertyOperations":19,"./Object.assign":35,"./ReactBrowserEventEmitter":39,"./ReactComponentBrowserEnvironment":44,"./ReactMount":79,"./ReactMultiChild":80,"./ReactPerf":84,"./escapeTextContentForBrowser":125,"./invariant":144,"./isEventSupported":145,"./keyOf":150,"./warning":163,"_process":1}],52:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -26213,7 +26313,7 @@ ReactPerf.measureMethods(ReactDOMIDOperations, 'ReactDOMIDOperations', {
 module.exports = ReactDOMIDOperations;
 
 }).call(this,require('_process'))
-},{"./CSSPropertyOperations":13,"./DOMChildrenOperations":17,"./DOMPropertyOperations":19,"./ReactMount":79,"./ReactPerf":84,"./invariant":144,"./setInnerHTML":157,"_process":167}],54:[function(require,module,exports){
+},{"./CSSPropertyOperations":13,"./DOMChildrenOperations":17,"./DOMPropertyOperations":19,"./ReactMount":79,"./ReactPerf":84,"./invariant":144,"./setInnerHTML":157,"_process":1}],54:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -26481,7 +26581,7 @@ var ReactDOMInput = ReactClass.createClass({
 module.exports = ReactDOMInput;
 
 }).call(this,require('_process'))
-},{"./AutoFocusMixin":10,"./DOMPropertyOperations":19,"./LinkedValueUtils":32,"./Object.assign":35,"./ReactBrowserComponentMixin":38,"./ReactClass":42,"./ReactElement":66,"./ReactMount":79,"./ReactUpdates":96,"./invariant":144,"_process":167}],57:[function(require,module,exports){
+},{"./AutoFocusMixin":10,"./DOMPropertyOperations":19,"./LinkedValueUtils":32,"./Object.assign":35,"./ReactBrowserComponentMixin":38,"./ReactClass":42,"./ReactElement":66,"./ReactMount":79,"./ReactUpdates":96,"./invariant":144,"_process":1}],57:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -26533,7 +26633,7 @@ var ReactDOMOption = ReactClass.createClass({
 module.exports = ReactDOMOption;
 
 }).call(this,require('_process'))
-},{"./ReactBrowserComponentMixin":38,"./ReactClass":42,"./ReactElement":66,"./warning":163,"_process":167}],58:[function(require,module,exports){
+},{"./ReactBrowserComponentMixin":38,"./ReactClass":42,"./ReactElement":66,"./warning":163,"_process":1}],58:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -27181,7 +27281,7 @@ var ReactDOMTextarea = ReactClass.createClass({
 module.exports = ReactDOMTextarea;
 
 }).call(this,require('_process'))
-},{"./AutoFocusMixin":10,"./DOMPropertyOperations":19,"./LinkedValueUtils":32,"./Object.assign":35,"./ReactBrowserComponentMixin":38,"./ReactClass":42,"./ReactElement":66,"./ReactUpdates":96,"./invariant":144,"./warning":163,"_process":167}],62:[function(require,module,exports){
+},{"./AutoFocusMixin":10,"./DOMPropertyOperations":19,"./LinkedValueUtils":32,"./Object.assign":35,"./ReactBrowserComponentMixin":38,"./ReactClass":42,"./ReactElement":66,"./ReactUpdates":96,"./invariant":144,"./warning":163,"_process":1}],62:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -27413,7 +27513,7 @@ module.exports = {
 };
 
 }).call(this,require('_process'))
-},{"./BeforeInputEventPlugin":11,"./ChangeEventPlugin":15,"./ClientReactRootIndex":16,"./DefaultEventPluginOrder":21,"./EnterLeaveEventPlugin":22,"./ExecutionEnvironment":29,"./HTMLDOMPropertyConfig":31,"./MobileSafariClickEventPlugin":34,"./ReactBrowserComponentMixin":38,"./ReactClass":42,"./ReactComponentBrowserEnvironment":44,"./ReactDOMButton":50,"./ReactDOMComponent":51,"./ReactDOMForm":52,"./ReactDOMIDOperations":53,"./ReactDOMIframe":54,"./ReactDOMImg":55,"./ReactDOMInput":56,"./ReactDOMOption":57,"./ReactDOMSelect":58,"./ReactDOMTextComponent":60,"./ReactDOMTextarea":61,"./ReactDefaultBatchingStrategy":62,"./ReactDefaultPerf":64,"./ReactElement":66,"./ReactEventListener":71,"./ReactInjection":73,"./ReactInstanceHandles":75,"./ReactMount":79,"./ReactReconcileTransaction":89,"./SVGDOMPropertyConfig":97,"./SelectEventPlugin":98,"./ServerReactRootIndex":99,"./SimpleEventPlugin":100,"./createFullPageComponent":120,"_process":167}],64:[function(require,module,exports){
+},{"./BeforeInputEventPlugin":11,"./ChangeEventPlugin":15,"./ClientReactRootIndex":16,"./DefaultEventPluginOrder":21,"./EnterLeaveEventPlugin":22,"./ExecutionEnvironment":29,"./HTMLDOMPropertyConfig":31,"./MobileSafariClickEventPlugin":34,"./ReactBrowserComponentMixin":38,"./ReactClass":42,"./ReactComponentBrowserEnvironment":44,"./ReactDOMButton":50,"./ReactDOMComponent":51,"./ReactDOMForm":52,"./ReactDOMIDOperations":53,"./ReactDOMIframe":54,"./ReactDOMImg":55,"./ReactDOMInput":56,"./ReactDOMOption":57,"./ReactDOMSelect":58,"./ReactDOMTextComponent":60,"./ReactDOMTextarea":61,"./ReactDefaultBatchingStrategy":62,"./ReactDefaultPerf":64,"./ReactElement":66,"./ReactEventListener":71,"./ReactInjection":73,"./ReactInstanceHandles":75,"./ReactMount":79,"./ReactReconcileTransaction":89,"./SVGDOMPropertyConfig":97,"./SelectEventPlugin":98,"./ServerReactRootIndex":99,"./SimpleEventPlugin":100,"./createFullPageComponent":120,"_process":1}],64:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -28193,7 +28293,7 @@ ReactElement.isValidElement = function(object) {
 module.exports = ReactElement;
 
 }).call(this,require('_process'))
-},{"./Object.assign":35,"./ReactContext":47,"./ReactCurrentOwner":48,"./warning":163,"_process":167}],67:[function(require,module,exports){
+},{"./Object.assign":35,"./ReactContext":47,"./ReactCurrentOwner":48,"./warning":163,"_process":1}],67:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -28658,7 +28758,7 @@ var ReactElementValidator = {
 module.exports = ReactElementValidator;
 
 }).call(this,require('_process'))
-},{"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactFragment":72,"./ReactNativeComponent":82,"./ReactPropTypeLocationNames":85,"./ReactPropTypeLocations":86,"./getIteratorFn":135,"./invariant":144,"./warning":163,"_process":167}],68:[function(require,module,exports){
+},{"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactFragment":72,"./ReactNativeComponent":82,"./ReactPropTypeLocationNames":85,"./ReactPropTypeLocations":86,"./getIteratorFn":135,"./invariant":144,"./warning":163,"_process":1}],68:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -28753,7 +28853,7 @@ var ReactEmptyComponent = {
 module.exports = ReactEmptyComponent;
 
 }).call(this,require('_process'))
-},{"./ReactElement":66,"./ReactInstanceMap":76,"./invariant":144,"_process":167}],69:[function(require,module,exports){
+},{"./ReactElement":66,"./ReactInstanceMap":76,"./invariant":144,"_process":1}],69:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -29203,7 +29303,7 @@ var ReactFragment = {
 module.exports = ReactFragment;
 
 }).call(this,require('_process'))
-},{"./ReactElement":66,"./warning":163,"_process":167}],73:[function(require,module,exports){
+},{"./ReactElement":66,"./warning":163,"_process":1}],73:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -29716,7 +29816,7 @@ var ReactInstanceHandles = {
 module.exports = ReactInstanceHandles;
 
 }).call(this,require('_process'))
-},{"./ReactRootIndex":92,"./invariant":144,"_process":167}],76:[function(require,module,exports){
+},{"./ReactRootIndex":92,"./invariant":144,"_process":1}],76:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -30741,7 +30841,7 @@ ReactPerf.measureMethods(ReactMount, 'ReactMount', {
 module.exports = ReactMount;
 
 }).call(this,require('_process'))
-},{"./DOMProperty":18,"./ReactBrowserEventEmitter":39,"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactElementValidator":67,"./ReactEmptyComponent":68,"./ReactInstanceHandles":75,"./ReactInstanceMap":76,"./ReactMarkupChecksum":78,"./ReactPerf":84,"./ReactReconciler":90,"./ReactUpdateQueue":95,"./ReactUpdates":96,"./containsNode":118,"./emptyObject":124,"./getReactRootElementInContainer":138,"./instantiateReactComponent":143,"./invariant":144,"./setInnerHTML":157,"./shouldUpdateReactComponent":160,"./warning":163,"_process":167}],80:[function(require,module,exports){
+},{"./DOMProperty":18,"./ReactBrowserEventEmitter":39,"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactElementValidator":67,"./ReactEmptyComponent":68,"./ReactInstanceHandles":75,"./ReactInstanceMap":76,"./ReactMarkupChecksum":78,"./ReactPerf":84,"./ReactReconciler":90,"./ReactUpdateQueue":95,"./ReactUpdates":96,"./containsNode":118,"./emptyObject":124,"./getReactRootElementInContainer":138,"./instantiateReactComponent":143,"./invariant":144,"./setInnerHTML":157,"./shouldUpdateReactComponent":160,"./warning":163,"_process":1}],80:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -31311,7 +31411,7 @@ var ReactNativeComponent = {
 module.exports = ReactNativeComponent;
 
 }).call(this,require('_process'))
-},{"./Object.assign":35,"./invariant":144,"_process":167}],83:[function(require,module,exports){
+},{"./Object.assign":35,"./invariant":144,"_process":1}],83:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -31423,7 +31523,7 @@ var ReactOwner = {
 module.exports = ReactOwner;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],84:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],84:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -31527,7 +31627,7 @@ function _noMeasure(objName, fnName, func) {
 module.exports = ReactPerf;
 
 }).call(this,require('_process'))
-},{"_process":167}],85:[function(require,module,exports){
+},{"_process":1}],85:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -31555,7 +31655,7 @@ if ("production" !== process.env.NODE_ENV) {
 module.exports = ReactPropTypeLocationNames;
 
 }).call(this,require('_process'))
-},{"_process":167}],86:[function(require,module,exports){
+},{"_process":1}],86:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -32284,7 +32384,7 @@ var ReactReconciler = {
 module.exports = ReactReconciler;
 
 }).call(this,require('_process'))
-},{"./ReactElementValidator":67,"./ReactRef":91,"_process":167}],91:[function(require,module,exports){
+},{"./ReactElementValidator":67,"./ReactRef":91,"_process":1}],91:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -32468,7 +32568,7 @@ module.exports = {
 };
 
 }).call(this,require('_process'))
-},{"./ReactElement":66,"./ReactInstanceHandles":75,"./ReactMarkupChecksum":78,"./ReactServerRenderingTransaction":94,"./emptyObject":124,"./instantiateReactComponent":143,"./invariant":144,"_process":167}],94:[function(require,module,exports){
+},{"./ReactElement":66,"./ReactInstanceHandles":75,"./ReactMarkupChecksum":78,"./ReactServerRenderingTransaction":94,"./emptyObject":124,"./instantiateReactComponent":143,"./invariant":144,"_process":1}],94:[function(require,module,exports){
 /**
  * Copyright 2014-2015, Facebook, Inc.
  * All rights reserved.
@@ -32880,7 +32980,7 @@ var ReactUpdateQueue = {
 module.exports = ReactUpdateQueue;
 
 }).call(this,require('_process'))
-},{"./Object.assign":35,"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactInstanceMap":76,"./ReactLifeCycle":77,"./ReactUpdates":96,"./invariant":144,"./warning":163,"_process":167}],96:[function(require,module,exports){
+},{"./Object.assign":35,"./ReactCurrentOwner":48,"./ReactElement":66,"./ReactInstanceMap":76,"./ReactLifeCycle":77,"./ReactUpdates":96,"./invariant":144,"./warning":163,"_process":1}],96:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -33162,7 +33262,7 @@ var ReactUpdates = {
 module.exports = ReactUpdates;
 
 }).call(this,require('_process'))
-},{"./CallbackQueue":14,"./Object.assign":35,"./PooledClass":36,"./ReactCurrentOwner":48,"./ReactPerf":84,"./ReactReconciler":90,"./Transaction":112,"./invariant":144,"./warning":163,"_process":167}],97:[function(require,module,exports){
+},{"./CallbackQueue":14,"./Object.assign":35,"./PooledClass":36,"./ReactCurrentOwner":48,"./ReactPerf":84,"./ReactReconciler":90,"./Transaction":112,"./invariant":144,"./warning":163,"_process":1}],97:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -33910,7 +34010,7 @@ var SimpleEventPlugin = {
 module.exports = SimpleEventPlugin;
 
 }).call(this,require('_process'))
-},{"./EventConstants":23,"./EventPluginUtils":27,"./EventPropagators":28,"./SyntheticClipboardEvent":101,"./SyntheticDragEvent":103,"./SyntheticEvent":104,"./SyntheticFocusEvent":105,"./SyntheticKeyboardEvent":107,"./SyntheticMouseEvent":108,"./SyntheticTouchEvent":109,"./SyntheticUIEvent":110,"./SyntheticWheelEvent":111,"./getEventCharCode":131,"./invariant":144,"./keyOf":150,"./warning":163,"_process":167}],101:[function(require,module,exports){
+},{"./EventConstants":23,"./EventPluginUtils":27,"./EventPropagators":28,"./SyntheticClipboardEvent":101,"./SyntheticDragEvent":103,"./SyntheticEvent":104,"./SyntheticFocusEvent":105,"./SyntheticKeyboardEvent":107,"./SyntheticMouseEvent":108,"./SyntheticTouchEvent":109,"./SyntheticUIEvent":110,"./SyntheticWheelEvent":111,"./getEventCharCode":131,"./invariant":144,"./keyOf":150,"./warning":163,"_process":1}],101:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -34870,7 +34970,7 @@ var Transaction = {
 module.exports = Transaction;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],113:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],113:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -34965,7 +35065,7 @@ function accumulateInto(current, next) {
 module.exports = accumulateInto;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],115:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],115:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -35265,7 +35365,7 @@ function createFullPageComponent(tag) {
 module.exports = createFullPageComponent;
 
 }).call(this,require('_process'))
-},{"./ReactClass":42,"./ReactElement":66,"./invariant":144,"_process":167}],121:[function(require,module,exports){
+},{"./ReactClass":42,"./ReactElement":66,"./invariant":144,"_process":1}],121:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -35355,7 +35455,7 @@ function createNodesFromMarkup(markup, handleScript) {
 module.exports = createNodesFromMarkup;
 
 }).call(this,require('_process'))
-},{"./ExecutionEnvironment":29,"./createArrayFromMixed":119,"./getMarkupWrap":136,"./invariant":144,"_process":167}],122:[function(require,module,exports){
+},{"./ExecutionEnvironment":29,"./createArrayFromMixed":119,"./getMarkupWrap":136,"./invariant":144,"_process":1}],122:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -35471,7 +35571,7 @@ if ("production" !== process.env.NODE_ENV) {
 module.exports = emptyObject;
 
 }).call(this,require('_process'))
-},{"_process":167}],125:[function(require,module,exports){
+},{"_process":1}],125:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -35584,7 +35684,7 @@ function findDOMNode(componentOrElement) {
 module.exports = findDOMNode;
 
 }).call(this,require('_process'))
-},{"./ReactCurrentOwner":48,"./ReactInstanceMap":76,"./ReactMount":79,"./invariant":144,"./isNode":146,"./warning":163,"_process":167}],127:[function(require,module,exports){
+},{"./ReactCurrentOwner":48,"./ReactInstanceMap":76,"./ReactMount":79,"./invariant":144,"./isNode":146,"./warning":163,"_process":1}],127:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -35642,7 +35742,7 @@ function flattenChildren(children) {
 module.exports = flattenChildren;
 
 }).call(this,require('_process'))
-},{"./traverseAllChildren":162,"./warning":163,"_process":167}],128:[function(require,module,exports){
+},{"./traverseAllChildren":162,"./warning":163,"_process":1}],128:[function(require,module,exports){
 /**
  * Copyright 2014-2015, Facebook, Inc.
  * All rights reserved.
@@ -36129,7 +36229,7 @@ function getMarkupWrap(nodeName) {
 module.exports = getMarkupWrap;
 
 }).call(this,require('_process'))
-},{"./ExecutionEnvironment":29,"./invariant":144,"_process":167}],137:[function(require,module,exports){
+},{"./ExecutionEnvironment":29,"./invariant":144,"_process":1}],137:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -36528,7 +36628,7 @@ function instantiateReactComponent(node, parentCompositeType) {
 module.exports = instantiateReactComponent;
 
 }).call(this,require('_process'))
-},{"./Object.assign":35,"./ReactCompositeComponent":46,"./ReactEmptyComponent":68,"./ReactNativeComponent":82,"./invariant":144,"./warning":163,"_process":167}],144:[function(require,module,exports){
+},{"./Object.assign":35,"./ReactCompositeComponent":46,"./ReactEmptyComponent":68,"./ReactNativeComponent":82,"./invariant":144,"./warning":163,"_process":1}],144:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -36585,7 +36685,7 @@ var invariant = function(condition, format, a, b, c, d, e, f) {
 module.exports = invariant;
 
 }).call(this,require('_process'))
-},{"_process":167}],145:[function(require,module,exports){
+},{"_process":1}],145:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -36800,7 +36900,7 @@ var keyMirror = function(obj) {
 module.exports = keyMirror;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],150:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],150:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -36962,7 +37062,7 @@ function onlyChild(children) {
 module.exports = onlyChild;
 
 }).call(this,require('_process'))
-},{"./ReactElement":66,"./invariant":144,"_process":167}],154:[function(require,module,exports){
+},{"./ReactElement":66,"./invariant":144,"_process":1}],154:[function(require,module,exports){
 /**
  * Copyright 2013-2015, Facebook, Inc.
  * All rights reserved.
@@ -37325,7 +37425,7 @@ function shouldUpdateReactComponent(prevElement, nextElement) {
 module.exports = shouldUpdateReactComponent;
 
 }).call(this,require('_process'))
-},{"./warning":163,"_process":167}],161:[function(require,module,exports){
+},{"./warning":163,"_process":1}],161:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -37397,7 +37497,7 @@ function toArray(obj) {
 module.exports = toArray;
 
 }).call(this,require('_process'))
-},{"./invariant":144,"_process":167}],162:[function(require,module,exports){
+},{"./invariant":144,"_process":1}],162:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2015, Facebook, Inc.
@@ -37650,7 +37750,7 @@ function traverseAllChildren(children, callback, traverseContext) {
 module.exports = traverseAllChildren;
 
 }).call(this,require('_process'))
-},{"./ReactElement":66,"./ReactFragment":72,"./ReactInstanceHandles":75,"./getIteratorFn":135,"./invariant":144,"./warning":163,"_process":167}],163:[function(require,module,exports){
+},{"./ReactElement":66,"./ReactFragment":72,"./ReactInstanceHandles":75,"./getIteratorFn":135,"./invariant":144,"./warning":163,"_process":1}],163:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -37713,7 +37813,7 @@ if ("production" !== process.env.NODE_ENV) {
 module.exports = warning;
 
 }).call(this,require('_process'))
-},{"./emptyFunction":123,"_process":167}],164:[function(require,module,exports){
+},{"./emptyFunction":123,"_process":1}],164:[function(require,module,exports){
 module.exports = require('./lib/React');
 
 },{"./lib/React":37}],165:[function(require,module,exports){
@@ -37853,99 +37953,7 @@ exports['default'] = _react2['default'].createClass({
 });
 module.exports = exports['default'];
 
-},{"react":164}],167:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
-}
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = setTimeout(cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            currentQueue[queueIndex].run();
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    clearTimeout(timeout);
-}
-
-process.nextTick = function (fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        setTimeout(drainQueue, 0);
-    }
-};
-
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-// TODO(shtylman)
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
-},{}],"simple-goban":[function(require,module,exports){
+},{"react":164}],"simple-goban":[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, '__esModule', {

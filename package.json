@@ -20,7 +20,7 @@
     ]
   },
   "dependencies": {
-    "godash": "^0.1.5",
+    "godash": "^0.1.6",
     "lodash": "^3.10.1",
     "react": "^0.13.3"
   },

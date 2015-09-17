@@ -43,6 +43,6 @@ export default React.createClass({
         classes += this.props.rightEdge ? ' right-edge' : '';
         classes += this.props.starPoint ? ' star-point' : '';
         classes += ' position';
-        return <div className={classes} onClick={this.clicked}>hi</div>;
+        return <div className={classes} onClick={this.clicked}></div>;
     },
 });

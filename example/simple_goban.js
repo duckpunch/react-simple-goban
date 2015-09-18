@@ -37767,14 +37767,28 @@ exports['default'] = _react2['default'].createClass({
         this.setState({ board: board });
     },
 
+    isStarPoint: function isStarPoint(x, y) {
+        if (this.state.board.board_size === 19) {
+            var x_star = x === 3 || x === 9 || x === 15;
+            var y_star = y === 3 || y === 9 || y === 15;
+            return x_star && y_star;
+        } else {
+            return false;
+        }
+    },
+
     renderRow: function renderRow(row_index) {
         var _this = this;
 
         var manager = this.props.manager;
+        var top_edge = row_index === 0;
+        var bottom_edge = row_index + 1 === this.state.board.board_size;
         return (0, _lodash.map)((0, _lodash.range)(this.state.board.board_size), function (i) {
             return _react2['default'].createElement(_PositionJsx2['default'], {
-                key: i + ',' + row_index,
-                x: i, y: row_index, manager: manager,
+                key: i + ',' + row_index, x: i, y: row_index, manager: manager,
+                starPoint: _this.isStarPoint(i, row_index),
+                topEdge: top_edge, bottomEdge: bottom_edge,
+                leftEdge: i === 0, rightEdge: i + 1 === _this.state.board.board_size,
                 stone: _this.state.board.positions.get(_godash2['default'].position(i, row_index), '') });
         });
     },
@@ -37848,13 +37862,6 @@ exports['default'] = _react2['default'].createClass({
     },
 
     render: function render() {
-        var classes = this.props.topEdge ? ' top-edge' : '';
-        classes += this.props.bottomEdge ? ' bottom-edge' : '';
-        classes += this.props.leftEdge ? ' left-edge' : '';
-        classes += this.props.rightEdge ? ' right-edge' : '';
-        classes += this.props.starPoint ? ' star-point' : '';
-        classes += ' position';
-
         var drawing = [];
         if (!this.props.bottomEdge) {
             drawing.push(_react2['default'].createElement('line', { x1: '15', y1: '15', x2: '15', y2: '30', stroke: 'black', key: 'bottom' }));
@@ -37868,12 +37875,20 @@ exports['default'] = _react2['default'].createClass({
         if (!this.props.rightEdge) {
             drawing.push(_react2['default'].createElement('line', { x1: '15', y1: '15', x2: '30', y2: '15', stroke: 'black', key: 'right' }));
         }
+        if (this.props.starPoint) {
+            drawing.push(_react2['default'].createElement('rect', { x: '12', y: '12', width: '6', height: '6', key: 'star' }));
+        }
+        if (this.props.stone) {
+            drawing.push(_react2['default'].createElement('circle', { cx: '15', cy: '15', r: '13', className: 'stone-border', key: 'stone-border' }));
+            drawing.push(_react2['default'].createElement('circle', { cx: '15', cy: '15', r: '12', className: this.props.stone, key: 'stone' }));
+        } else {
+            drawing.push(_react2['default'].createElement('circle', { cx: '15', cy: '15', r: '13', className: 'hover', key: 'stone-hover' }));
+        }
 
         return _react2['default'].createElement(
             'svg',
-            { className: classes, onClick: this.clicked },
-            drawing,
-            _react2['default'].createElement('circle', { cx: '15', cy: '15', r: '12', className: this.props.stone + ' stone' })
+            { className: 'position', onClick: this.clicked },
+            drawing
         );
     }
 });

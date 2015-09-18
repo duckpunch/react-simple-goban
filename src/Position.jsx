@@ -36,13 +36,30 @@ export default React.createClass({
     },
 
     render() {
-        let classes = this.props.stone;
-        classes += this.props.topEdge ? ' top-edge' : '';
+        let classes = this.props.topEdge ? ' top-edge' : '';
         classes += this.props.bottomEdge ? ' bottom-edge' : '';
         classes += this.props.leftEdge ? ' left-edge' : '';
         classes += this.props.rightEdge ? ' right-edge' : '';
         classes += this.props.starPoint ? ' star-point' : '';
         classes += ' position';
-        return <div className={classes} onClick={this.clicked}></div>;
+
+        const drawing = [];
+        if (!this.props.bottomEdge) {
+            drawing.push(<line x1="15" y1="15" x2="15" y2="30" stroke="black" key="bottom"/>);
+        }
+        if (!this.props.topEdge) {
+            drawing.push(<line x1="15" y1="0" x2="15" y2="15" stroke="black" key="top"/>);
+        }
+        if (!this.props.leftEdge) {
+            drawing.push(<line x1="0" y1="15" x2="15" y2="15" stroke="black" key="left"/>);
+        }
+        if (!this.props.rightEdge) {
+            drawing.push(<line x1="15" y1="15" x2="30" y2="15" stroke="black" key="right"/>);
+        }
+
+        return (<svg className={classes} onClick={this.clicked}>
+            {drawing}
+            <circle cx="15" cy="15" r="12" className={this.props.stone + ' stone'}/>
+        </svg>);
     },
 });

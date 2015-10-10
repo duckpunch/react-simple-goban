@@ -4,4 +4,4 @@ A simple implementation of a goban using [React](https://facebook.github.io/reac
 
 ![screenshot](https://raw.githubusercontent.com/duckpunch/react-simple-goban/master/board.png)
 
-Uses [SVG](https://developer.mozilla.org/en-US/docs/Web/SVG) to accomplish the shapes.
+Uses [SVG](https://developer.mozilla.org/en-US/docs/Web/SVG) to accomplish the shapes and simple event handlers for the move making.
